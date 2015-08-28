@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:jee="http://www.springframework.org/schema/jee"
+	xmlns:jpa="http://www.springframework.org/schema/data/jpa"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+		http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/data/jpa
+		http://www.springframework.org/schema/data/jpa/spring-jpa.xsd
+		http://www.springframework.org/schema/context
+		http://www.springframework.org/schema/context/spring-context.xsd
+		http://www.springframework.org/schema/tx 
+		http://www.springframework.org/schema/tx/spring-tx.xsd">
+
+	<context:annotation-config />
+	<!-- <tx:annotation-driven /> -->
+	<tx:annotation-driven transaction-manager="transactionManager" />
+	<!-- <tx:jta-transaction-manager transaction-manager="transactionManager" /> -->
+	
+	<!-- Uncomment and add your base-package here: <context:component-scan base-package="org.springframework.samples.service"/> -->
+
+	<!-- <jee:jndi-lookup id="dataSource" jndi-name="jdbc/DevSchema" expected-type="javax.sql.DataSource" /> -->
+	
+	<!-- Bitronix Transaction Manager Start -->
+	<bean id="btmConfig" factory-method="getConfiguration" class="bitronix.tm.TransactionManagerServices">
+	    <property name="serverId" value="${node.name}-btx-server" />
+	    <property name="logPart1Filename" value="${bitronix.tm.journal.disk.logPart1Filename}" />
+    	<property name="logPart2Filename" value="${bitronix.tm.journal.disk.logPart2Filename}" />
+  	</bean>
+  
+  	<!-- Create BTM transaction manager -->
+	<bean id="bitronixTransactionManager" factory-method="getTransactionManager"
+		class="bitronix.tm.TransactionManagerServices" depends-on="dataSource1,dataSource2,btmConfig" destroy-method="shutdown" />
+
+	<bean id="transactionManager" class="org.springframework.transaction.jta.JtaTransactionManager" primary="true">
+		<property name="transactionManager" ref="bitronixTransactionManager" />
+		<property name="userTransaction" ref="bitronixTransactionManager" />
+		<property name="allowCustomIsolationLevels" value="true"/>
+		<property name="defaultTimeout" value="10000" />
+	</bean>
+	<!-- End -->
+
+	<!-- Bitronix Datasource1 -->
+	<bean id="dataSource1" class="bitronix.tm.resource.jdbc.PoolingDataSource" init-method="init" destroy-method="close">
+		<property name="className" value="com.mysql.jdbc.jdbc2.optional.MysqlXADataSource" />
+		<property name="uniqueName" value="POC_DS1" />
+		<property name="minPoolSize" value="5" />
+		<property name="maxPoolSize" value="10" />
+		<property name="testQuery" value="SELECT 1" />
+		<property name="driverProperties">
+			<props>
+				<prop key="url">jdbc:mysql://localhost:3306/test</prop>
+				<prop key="user">root</prop>
+				<prop key="password">surya</prop>
+			</props>
+		</property>
+	</bean>
+	
+	<!-- Bitronix Datasource2 -->
+	<bean id="dataSource2" class="bitronix.tm.resource.jdbc.PoolingDataSource" init-method="init" destroy-method="close">
+		<property name="className" value="com.mysql.jdbc.jdbc2.optional.MysqlXADataSource" />
+		<property name="uniqueName" value="POC_DS2" />
+		<property name="minPoolSize" value="5" />
+		<property name="maxPoolSize" value="10" />
+		<property name="testQuery" value="SELECT 1" />
+		<property name="driverProperties">
+			<props>
+				<prop key="url">jdbc:mysql://localhost:3306/test1</prop>
+				<prop key="user">root</prop>
+				<prop key="password">surya</prop>
+			</props>
+		</property>
+	</bean>
+	
+	<!-- End -->
+
+	<!-- Define SessionFactory bean -->
+	<!-- <bean id="sessionFactory" class="org.springframework.orm.hibernate3.LocalSessionFactoryBean">
+		<property name="dataSource" ref="dataSource" />
+		<property name="mappingResources">
+			<list>
+				<value>domain-classes.hbm.xml</value>
+			</list>
+		</property>
+	</bean> -->
+	
+	<bean id="entityManagerFactory1" class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean" depends-on="bitronixTransactionManager">
+		<property name="persistenceXmlLocation" value="classpath*:META-INF/persistence.xml"/>
+		<property name="persistenceUnitName" value="jpa-poc1" />
+		<property name="dataSource" ref="dataSource1" />
+		<property name="jpaVendorAdapter">
+			<bean class="org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter" />
+		</property>
+		<property name="jpaPropertyMap">
+			<map>
+				<entry key="hibernate.default_schema" value="test" />
+				<entry key="hibernate.show_sql" value="true" />
+				<entry key="hibernate.format_sql" value="true" />
+				<entry key="hibernate.transaction.flush_before_completion" value="true" />
+				<entry key="hibernate.transaction.auto_close_session" value="false" />
+				<entry key="hibernate.dialect" value="org.hibernate.dialect.MySQL5Dialect" />
+				<!-- <entry key="hibernate.transaction.manager_lookup_class" value="org.hibernate.transaction.BTMTransactionManagerLookup" /> -->
+				<entry key="hibernate.current_session_context_class" value="jta" />
+			</map>
+		</property>
+	</bean>
+	
+	<bean id="entityManagerFactory2" class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean" depends-on="bitronixTransactionManager">
+		<property name="persistenceXmlLocation" value="classpath*:META-INF/persistence.xml"/>
+		<property name="persistenceUnitName" value="jpa-poc2" />
+		<property name="dataSource" ref="dataSource2" />
+		<property name="jpaVendorAdapter">
+			<bean class="org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter" />
+		</property>
+		<property name="jpaPropertyMap">
+			<map>
+				<entry key="hibernate.default_schema" value="test1" />
+				<entry key="hibernate.show_sql" value="true" />
+				<entry key="hibernate.format_sql" value="true" />
+				<entry key="hibernate.transaction.flush_before_completion" value="true" />
+				<entry key="hibernate.transaction.auto_close_session" value="false" />
+				<entry key="hibernate.dialect" value="org.hibernate.dialect.MySQL5Dialect" />
+				<!-- <entry key="hibernate.transaction.manager_lookup_class" value="org.hibernate.transaction.BTMTransactionManagerLookup" /> -->
+				<entry key="hibernate.current_session_context_class" value="jta" />
+			</map>
+		</property>
+	</bean>
+	
+	<bean id="entityManager1" class="org.springframework.orm.jpa.support.SharedEntityManagerBean">
+		<property name="entityManagerFactory" ref="entityManagerFactory1" />
+	</bean>
+	
+	<bean id="entityManager2" class="org.springframework.orm.jpa.support.SharedEntityManagerBean">
+		<property name="entityManagerFactory" ref="entityManagerFactory2" />
+	</bean>
+	
+	<bean id="empADAO" class="com.technoficent.btm.dao.EmployeeADAOImpl" />
+	<bean id="empBDAO" class="com.technoficent.btm.dao.EmployeeBDAOImpl" />
+	<bean id="empService" class="com.technoficent.btm.services.EmployeeImpl" />
+
+</beans>
